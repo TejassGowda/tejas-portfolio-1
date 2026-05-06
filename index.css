@@ -1,0 +1,151 @@
+import { useState, useRef, useEffect } from "react";
+import { GoogleGenAI } from "@google/genai";
+import { MessageSquare, X, Send, Bot, User, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { AI_CONTEXT } from "../constants";
+
+export default function AIChat() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<{ role: "user" | "ai"; content: string }[]>([
+    { role: "ai", content: "Hi! I'm Tejas's AI assistant. Ask me anything about his skills, projects, or experience!" }
+  ]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage = input.trim();
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setIsLoading(true);
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [
+          { role: "user", parts: [{ text: AI_CONTEXT }] },
+          ...messages.map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] })),
+          { role: "user", parts: [{ text: userMessage }] }
+        ],
+      });
+
+      const aiText = response.text || "I'm sorry, I couldn't process that.";
+      setMessages((prev) => [...prev, { role: "ai", content: aiText }]);
+    } catch (error) {
+      console.error("AI Chat Error:", error);
+      setMessages((prev) => [...prev, { role: "ai", content: "Sorry, I had a bit of a brain freeze. Try again?" }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Toggle Button */}
+      <motion.button
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() => setIsOpen(true)}
+        className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors group"
+        id="ai-chat-toggle"
+      >
+        <MessageSquare className="w-6 h-6" />
+        <span className="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-gray-900 text-white px-3 py-1 rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+          Ask my AI Assistant
+        </span>
+      </motion.button>
+
+      {/* Chat Window */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-24 right-6 w-[350px] h-[500px] bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden"
+            id="ai-chat-window"
+          >
+            {/* Header */}
+            <div className="bg-gray-800 p-4 flex justify-between items-center border-bottom border-gray-700 font-sans">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                  <Bot className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-white text-sm font-semibold">Career Assistant</h3>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <span className="text-[10px] text-gray-400 uppercase tracking-wider">AI Powered</span>
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-700">
+              {messages.map((m, i) => (
+                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                    m.role === "user" 
+                    ? "bg-blue-600 text-white rounded-tr-none" 
+                    : "bg-gray-800 text-gray-200 rounded-tl-none border border-gray-700"
+                  }`}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-800 p-3 rounded-2xl rounded-tl-none border border-gray-700 flex gap-1">
+                    <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" />
+                    <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0.2s]" />
+                    <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0.4s]" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Input */}
+            <div className="p-4 border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm">
+              <form 
+                onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+                className="flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask a question..."
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                />
+                <button 
+                  type="submit"
+                  disabled={!input.trim() || isLoading}
+                  className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+              <div className="mt-2 flex items-center justify-center gap-1 text-[10px] text-gray-500">
+                <Sparkles className="w-2.5 h-2.5" />
+                <span>Powered by Google Gemini</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
